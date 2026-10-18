@@ -1,3 +1,4 @@
+> **Documentation note for SafeHaven:** This file is inherited from the original Silicon Labs Wi-Fi power-save example. Its Energy Profiler, iPerf, and current-measurement procedures describe that example and are not evidence of power measurements performed for SafeHaven. SafeHaven's current prototype streams microphone audio over Wi-Fi UDP for host-side speech recognition and event-triggered camera recording.
 # Wi-Fi - Powersave Standby Associated
 
 ## High-Level Overview
