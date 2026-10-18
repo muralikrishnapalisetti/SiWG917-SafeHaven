@@ -1,0 +1,79 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.wav
+*.mp3
+*.mp4
+*.avi
+*.mkv
+vosk-model*/
+safehaven_events/
+build/
+Debug/
+Release/
+*.log
+.env
+
+# Generated firmware build output
+firmware/**/cmake_gcc/build/
+firmware/**/Debug/
+firmware/**/Release/
+firmware/**/build/
+
+# Python generated files and environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Local recordings, event evidence and logs
+*.wav
+*.mp3
+*.mp4
+*.avi
+*.mkv
+safehaven_events/
+logs/
+
+# Local speech-recognition model files
+vosk-model*/
+*.zip
+
+# Local secrets
+.env
+.env.*
+!.env.example
+
+# Local workspace and editor metadata
+**/.projectlinkstore
+**/.silabsExtContext
+**/.codex/
+firmware/**/simplicity_sdk_2026.6.1/
+firmware/**/wiseconnect3_sdk_4.1.1/
+
+# Temporary backup files
+*.bak
+
+# Silicon Labs generated build and machine-specific toolchain files
+**/cmake_gcc/build/
+**/cmake_gcc/autogen_toolchain.cmake
+
+# Silicon Labs SDK source trees are retained locally, not committed
+**/simplicity_sdk_2026.6.1/
+**/wiseconnect3_sdk_4.1.1/
+
+# Local Silicon Labs IDE and assistant workspace metadata
+**/.projectlinkstore
+**/.silabsExtContext
+**/.codex/
+**/AGENTS.md
+
+# Local backup of project metadata
+**/*.before_safehaven_metadata.bak
+
+# Generated Simplicity Studio state and SBOM reports
+**/autogen/.slc_state/
+**/autogen/sbom/
+
+# Machine-specific editor settings
+**/vscode.conf
