@@ -1,10 +1,10 @@
-# SafeHaven Firmware
+﻿# SafeHaven Firmware
 
 ## Project
 
-**SafeHaven: Local-AI Emergency Phrase Detection and Event-Triggered Video Evidence Capture**
+**SiWG917 SafeHaven: An Edge-AI Emergency Detection and Event-Triggered Evidence Capture System**
 
-This firmware captures microphone audio on the Silicon Labs SiWG917 development kit and streams PCM audio to a host computer over Wi-Fi using UDP. Speech recognition currently runs on the host computer; on-device/MCU keyword inference is not integrated in the active firmware.
+This firmware captures microphone audio on the Silicon Labs SiWG917 development kit and streams PCM audio to a host computer over Wi-Fi using UDP.
 
 ## Current Firmware Functionality
 
@@ -13,7 +13,7 @@ This firmware captures microphone audio on the Silicon Labs SiWG917 development 
 - Uses UDP port `5006` for the host audio receiver.
 - Relies on the host-side Python application for speech recognition and emergency-phrase detection.
 
-Do not describe the active firmware as performing on-device AI inference unless that functionality is implemented and verified.
+The active firmware should not be described as performing on-device keyword inference unless that functionality is separately implemented and verified.
 
 ## Prototype Data Flow
 
@@ -23,7 +23,7 @@ Do not describe the active firmware as performing on-device AI inference unless 
 4. When the configured emergency phrase is detected, the host sends a JSON event to the camera-event receiver on UDP port `5005`.
 5. `host/safehaven_receiver_reference.py` validates the event and attempts to record a 10-second video clip.
 
-The host applications are maintained separately from this firmware project. See the repository root `README.md` for setup steps, architecture, and prototype status.
+The host applications are maintained separately from this firmware project.
 
 ## Configuration
 
@@ -41,9 +41,9 @@ Ensure the development kit and host computer can communicate over the local netw
 4. Review the project configuration and network settings.
 5. Build the project in Simplicity Studio.
 6. Flash the resulting firmware to the supported development kit.
-7. Start the host audio receiver and validate audio delivery.
+7. Start the host audio receiver and test audio delivery.
 
-The build and flash process must be verified in the target development environment. This document does not claim that a clean firmware build has been completed.
+The build and flash process must be verified in the target development environment. This document does not claim that a clean build has been completed.
 
 ## Security and Limitations
 
