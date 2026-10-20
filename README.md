@@ -557,7 +557,7 @@ The firmware project is based on a Silicon Labs Wi-Fi example and has been adapt
 
 The inherited firmware `readme.md` describes procedures from the original Wi-Fi power-save example, including Energy Profiler and current measurements. Those inherited instructions are not evidence that power measurements were performed for SafeHaven.
 
-Add a root-level `LICENSE` file to this repository before sharing it through community listings. Choose a license that matches your intentions and that you are entitled to apply to your own contributions; do not relicense third-party Silicon Labs files contrary to their original terms.
+The root-level `LICENSE` file is included. It applies only to original SafeHaven code and documentation authored by the project contributor, subject to the exceptions stated in that file. Silicon Labs SDK files, vendor examples, generated files, and third-party dependencies remain subject to their own applicable license terms; do not relicense third-party material contrary to those terms.
 
 ---
 
