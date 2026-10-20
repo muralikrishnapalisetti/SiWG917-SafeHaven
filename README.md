@@ -95,17 +95,17 @@ The silent demo is intended to show the actual workflow: the system is armed, th
 
 This screenshot shows the live camera in the recording state, the host-side recognition/event output, and the camera receiver reporting event-triggered recording. The visible `HELP ME DETECTED` and event-sent messages are evidence from the captured host application output.
 
-![SafeHaven phrase detection and event trigger](demo/screenshots/safehaven-trigger-detected.png)
+![SafeHaven phrase detection and event trigger](safehaven-trigger-detected.png)
 
 ### Output screenshot 2 — Recording in progress
 
 This screenshot shows the webcam overlay indicating that recording is active and a countdown is in progress. The camera receiver terminal shows event handling and generated AVI file paths.
 
-![SafeHaven event-triggered recording in progress](demo/screenshots/safehaven-recording-active.png)
+![SafeHaven event-triggered recording in progress](safehaven-recording-active.png)
 
 **What the demonstration establishes:** the captured run shows phrase detection, successful local event transmission, and recording initiated by the camera receiver. These screenshots document an example run; they do not establish recognition accuracy, response latency across all conditions, or production reliability.
 
-> **Repository asset setup:** Commit the two screenshots to `demo/screenshots/` using the filenames above. For the video, prefer a GitHub Release asset rather than committing a large MP4 into source history. Until those assets are uploaded, the image paths and video link will not render in the public repository.
+> **Image locations:** The two screenshots are currently stored in the repository root, so the image links above intentionally use root-relative filenames. For the video, prefer a GitHub Release asset rather than committing a large MP4 into source history. Update the video link to the published release asset once the MP4 has been uploaded.
 
 ---
 
@@ -242,10 +242,6 @@ The host scripts use Python's standard library for UDP sockets, JSON, WAV proces
 ```text
 .
 ├── README.md
-├── demo/
-│   └── screenshots/
-│       ├── safehaven-trigger-detected.png
-│       └── safehaven-recording-active.png
 ├── firmware/
 │   └── SafeHaven_UDP_Client/
 │       ├── SafeHaven_UDP_Client.slcp
@@ -259,6 +255,8 @@ The host scripts use Python's standard library for UDP sockets, JSON, WAV proces
 ├── host/
 │   ├── safehaven_audio_receiver.py
 │   └── safehaven_receiver_reference.py
+├── safehaven-trigger-detected.png
+├── safehaven-recording-active.png
 ├── submission_inventory.csv
 └── .gitignore
 ```
