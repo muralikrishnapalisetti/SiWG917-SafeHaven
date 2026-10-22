@@ -137,7 +137,7 @@ SafeHaven is a **two-process, host-assisted safety-monitoring prototype**. The S
 
 The diagram separates the embedded audio path, Wi-Fi transport, host processes, inter-process event message, and local evidence outputs. Arrows show the direction of data flow.
 
-\`\`\`mermaid
+```mermaid
 flowchart TB
     subgraph DEVICE["01 · EMBEDDED DEVICE — Silicon Labs SiWG917 / SiWx917"]
         direction LR
@@ -201,13 +201,13 @@ flowchart TB
     class RX,CONDITION,RECOGNISE,GATE,EVENT_RX,VALIDATE,CAPTURE process;
     class EVENT event;
     class WAVS,VIDEO,LOG output;
-\`\`\`
+```
 
 ### Trigger and recording logic
 
 This flow describes the decision path after audio reaches the PC. The phrase match and cooldown are handled by the audio process; event validation, duplicate handling, and recording state are handled independently by the camera process.
 
-\`\`\`mermaid
+```mermaid
 flowchart TD
     A["Receive an audio UDP packet"] --> B["Decode PCM, write diagnostics,<br/>apply software gain"]
     B --> C["Feed audio to the local Vosk recogniser"]
@@ -234,7 +234,7 @@ flowchart TD
     class D,E,F,H,J decision;
     class A,B,C,G,K,L,M action;
     class I ignore;
-\`\`\`
+```
 
 ### Component responsibilities
 
