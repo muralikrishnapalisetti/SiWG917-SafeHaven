@@ -17,6 +17,12 @@ The project demonstrates an end-to-end embedded-to-host workflow: **microphone c
 - [Live output demonstration](#live-output-demonstration)
 - [Current features and future scope](#current-features-and-future-scope)
 - [System architecture](#system-architecture)
+  - [End-to-end architecture](#end-to-end-architecture)
+  - [Trigger and recording logic](#trigger-and-recording-logic)
+  - [Component responsibilities](#component-responsibilities)
+  - [Interfaces and event contract](#interfaces-and-event-contract)
+  - [Recording and output lifecycle](#recording-and-output-lifecycle)
+  - [Implementation boundary and validation notes](#implementation-boundary-and-validation-notes)
 - [End-to-end operating sequence](#end-to-end-operating-sequence)
 - [Implementation details](#implementation-details)
 - [Hardware and software requirements](#hardware-and-software-requirements)
@@ -172,7 +178,7 @@ flowchart TB
             direction LR
             EVENT_RX["Event UDP listener<br/>0.0.0.0:5005"]
             VALIDATE["Validate event type, phrase,<br/>source and event ID<br/>Reject duplicates / busy-state events"]
-            CAPTURE["Webcam capture<br/>Nominal 10 seconds<br/>MJPG-encoded AVI"]
+            CAPTURE["Webcam capture<br/>Configured 640x480 at 20 FPS<br/>Nominal 10 seconds · MJPG/AVI"]
             EVENT_RX --> VALIDATE --> CAPTURE
         end
         subgraph OUTPUTS["LOCAL OUTPUT FILES"]
@@ -209,31 +215,34 @@ This flow describes the decision path after audio reaches the PC. The phrase mat
 
 ```mermaid
 flowchart TD
-    A["Receive an audio UDP packet"] --> B["Decode PCM, write diagnostics,<br/>apply software gain"]
-    B --> C["Feed audio to the local Vosk recogniser"]
-    C --> D{"Accepted phrase found?"}
-    D -- "Stable partial phrase" --> E{"Present across 3<br/>consecutive checks?"}
+    A["Receive one UDP audio packet"] --> B["Preserve raw audio diagnostics<br/>Apply 4x gain with saturation"]
+    B --> C["Update the Vosk recogniser"]
+    C --> D{"Result type?"}
+    D -- "Partial result" --> E{"Contains a configured<br/>help phrase?"}
     E -- "No" --> C
-    E -- "Yes" --> F{"10-second trigger<br/>cooldown elapsed?"}
-    D -- "Final transcript" --> F
-    D -- "No match" --> C
+    E -- "Yes" --> F{"Phrase stable across<br/>3 consecutive checks?"}
     F -- "No" --> C
-    F -- "Yes" --> G["Send JSON event to<br/>127.0.0.1:5005"]
-    G --> H{"Event schema valid?"}
-    H -- "No" --> I["Ignore event"]
-    H -- "Yes" --> J{"Event ID is new<br/>and camera is idle?"}
-    J -- "No" --> I
-    J -- "Yes" --> K["Record webcam for<br/>nominal 10 seconds"]
-    K --> L["Save AVI and append<br/>event status to JSONL log"]
-    I --> M["Continue monitoring"]
-    L --> M
+    F -- "Yes" --> G{"10-second cooldown<br/>has elapsed?"}
+    D -- "Final result" --> H{"Final transcript contains<br/>a configured phrase?"}
+    H -- "No" --> C
+    H -- "Yes" --> G
+    G -- "No" --> C
+    G -- "Yes" --> I["Send JSON event to<br/>127.0.0.1:5005"]
+    I --> J{"Required event fields<br/>are valid?"}
+    J -- "No" --> K["Reject event"]
+    J -- "Yes" --> L{"Event ID is new and<br/>no recording is active?"}
+    L -- "No" --> K
+    L -- "Yes" --> M["Record webcam<br/>Nominal 10 seconds"]
+    M --> N["Save AVI and append<br/>event status to JSONL"]
+    K --> O["Continue monitoring"]
+    N --> O
 
     classDef decision fill:#FFF3E1,stroke:#C47A1A,color:#70420D,stroke-width:1.3px;
     classDef action fill:#E8F7F1,stroke:#23866A,color:#124C3D,stroke-width:1.3px;
     classDef ignore fill:#F1F4F8,stroke:#68778D,color:#263548,stroke-width:1.2px;
-    class D,E,F,H,J decision;
-    class A,B,C,G,K,L,M action;
-    class I ignore;
+    class D,E,F,G,H,J,L decision;
+    class A,B,C,I,M,N,O action;
+    class K ignore;
 ```
 
 ### Component responsibilities
@@ -264,7 +273,7 @@ The audio process sends a UTF-8 JSON datagram to **127.0.0.1:5005**. The event c
 | Field | Purpose | Current value / format |
 |---|---|---|
 | **type** | Identifies the event category | **SAFEHAVEN_VOICE_EVENT** |
-| **event_id** | Distinguishes an individual trigger | Generated ID string, e.g. **voice-...** |
+| **event_id** | Distinguishes an individual trigger and supports duplicate suppression | String generated using a high-resolution timestamp |
 | **phrase** | Normalised trigger category | **HELP_ME** |
 | **transcript** | Recognised phrase text | Text returned by the recogniser |
 | **source** | Identifies the audio input path | **siwx917_microphone** |
