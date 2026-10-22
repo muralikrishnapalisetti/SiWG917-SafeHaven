@@ -10,139 +10,209 @@ The project demonstrates an end-to-end embedded-to-host workflow: **microphone c
 
 ---
 
-## Contents
+## Table of contents
 
-- [Features](#features)
-- [Live demonstration](#live-demonstration)
+- [Why SafeHaven?](#why-safehaven)
+- [Potential applications](#potential-applications)
+- [Live output demonstration](#live-output-demonstration)
+- [Current features and future scope](#current-features-and-future-scope)
 - [System architecture](#system-architecture)
-- [End-to-end operation](#end-to-end-operation)
+- [End-to-end operating sequence](#end-to-end-operating-sequence)
+- [Implementation details](#implementation-details)
 - [Hardware and software requirements](#hardware-and-software-requirements)
 - [Repository structure](#repository-structure)
-- [Setup and installation](#setup-and-installation)
-- [Configure, build, and flash the firmware](#configure-build-and-flash-the-firmware)
-- [Run SafeHaven](#run-safehaven)
+- [Installation and host setup on Windows](#installation-and-host-setup-on-windows)
+- [Configure and flash the SiWG917 firmware](#configure-and-flash-the-siwg917-firmware)
+- [Run the prototype](#run-the-prototype)
 - [Network interfaces and event format](#network-interfaces-and-event-format)
-- [Output files and diagnostics](#output-files-and-diagnostics)
+- [Generated evidence and diagnostic outputs](#generated-evidence-and-diagnostic-outputs)
 - [Testing and validation](#testing-and-validation)
 - [Troubleshooting](#troubleshooting)
 - [Security, privacy, and safety limitations](#security-privacy-and-safety-limitations)
-- [Future improvements](#future-improvements)
-- [License and attribution](#license-and-attribution)
+- [Roadmap](#roadmap)
+- [Attribution and licensing](#attribution-and-licensing)
 
 ---
 
-## Features
+## Why SafeHaven?
 
-- **Embedded audio capture:** Captures microphone samples through the configured SiWG917 microphone/I2S path.
-- **Wi-Fi audio streaming:** Sends audio packets from the development kit to the host PC over UDP port `5006`.
-- **Offline speech recognition:** Uses the Vosk speech-recognition engine and its local English model on the host PC; the host does not need to call a cloud speech service.
-- **Phrase-based trigger:** Checks recognized text for the adjacent words `help me`. Configured examples include “help me”, “please help me”, and “help me please”.
-- **Structured local event:** Sends a JSON event from the audio receiver to the camera receiver over host loopback UDP port `5005`.
-- **Event validation:** Checks required event fields and ignores malformed messages, event IDs already seen by the running receiver, and events received while a recording is active.
-- **Event-triggered recording:** Attempts to save a nominal 10-second webcam clip after a qualifying new event.
-- **Local diagnostics:** Stores raw and gain-adjusted audio WAV files, video clips, and a JSON Lines event log.
+Many home-monitoring cameras continuously record, rely on motion detection, or require someone to manually access an application to preserve an incident. SafeHaven explores a complementary approach: **use a configured spoken emergency phrase as an explicit trigger to start recording a short clip**.
 
-The project includes diagnostic and demonstration outputs, but it does not yet establish measured detection accuracy, guaranteed latency, or production-level reliability.
+The intention is to make evidence capture possible with minimal physical interaction. In the current prototype, the clip is stored on the host computer. It does not yet provide remote notification, cloud storage, or guaranteed emergency assistance.
 
-## Live demonstration
+The basic concept is:
 
-The demonstration illustrates the host-side phrase trigger, local event transmission, and webcam recording state.
+1. A person says a configured phrase near the system microphone.
+2. The SiWG917 development kit sends microphone audio to a nearby PC over Wi-Fi.
+3. The PC runs local speech recognition and checks for the configured phrase.
+4. When recognition qualifies as a trigger, the audio application creates a structured event.
+5. The camera receiver validates the event and starts a 10-second webcam recording.
+6. The video clip and event status are saved locally for later review.
 
-- [Watch the silent SafeHaven demonstration](https://github.com/user-attachments/assets/9b3b8c87-9380-40e7-8c9a-4fe9fc0f1952)
-- [Open the demo release](https://github.com/muralikrishnapalisetti/SiWG917-SafeHaven/releases/tag/v1.0.0-demo)
+This is an **event-triggered recording prototype**, not a replacement for a conventional continuously recording CCTV system. It can miss events if the phrase is not recognized, the network or host fails, or the camera is unavailable.
 
-### Phrase detection and event transmission
+## Potential applications
+
+### 1. Assistance for older adults, pregnant people, or someone alone at home
+
+A person who is alone and has difficulty reaching a phone during an unexpected situation may be unable to unlock a device, open an app, or press a button. A voice-triggered interface could provide an additional way to initiate a recording workflow with minimal physical interaction.
+
+For example, if a person says a configured phrase such as “help me,” SafeHaven can—in the current prototype—send microphone audio over Wi-Fi to the host PC, recognize the phrase locally, and trigger a short webcam recording. The resulting clip and event log are saved on that PC.
+
+**Potential next step:** Send the event and recorded clip to a registered mobile device, together with a push notification and an audible alert or buzzer. This is a future enhancement; the present version does not send clips to a phone or contact emergency services.
+
+### 2. Incident documentation and home security
+
+During a possible intrusion, threat, or other concerning incident, a person may be able to say a configured phrase even when they cannot reach a physical control. A phrase-triggered recording could preserve a short video segment around the time of the trigger.
+
+This could complement an existing home CCTV system by adding an intentional, voice-triggered capture mode. It should not be described as a guaranteed method for recording a crime: a person may be unable or unwilling to speak, the phrase may not be recognized, the microphone may be obstructed, or the host, camera, or network may not be operational.
+
+**Potential next step:** Trigger a local buzzer or siren when a valid event starts recording, and optionally notify a registered mobile device. A buzzer may alert nearby occupants, but it could also escalate a situation; its behavior should be configurable and carefully evaluated.
+
+### Why event-triggered video capture?
+
+- **Hands-free trigger:** A spoken phrase is the main intended user interaction.
+- **Local evidence storage:** The prototype saves a short clip and event log on the host PC.
+- **Local speech processing:** Vosk performs recognition on the PC without requiring a cloud speech-recognition service.
+- **Defined event workflow:** A recognized phrase becomes a structured event that the camera receiver checks before recording.
+- **Extensible design:** Mobile alerts, buzzer control, and additional embedded trigger-processing options can be explored as future work.
+
+These are design goals and potential uses, not claims of certified safety, medical monitoring, guaranteed recognition, or proven crime prevention.
+
+---
+
+## Live output demonstration
+
+### Silent end-to-end video
+
+The silent demo is intended to show the actual workflow: the system is armed, the phrase **“help me”** is detected, an event is sent, and the camera receiver begins recording. The recording is screen-only, with no narration or music.
+
+**Video:** Upload the MP4 as a GitHub Release asset and replace the URL below with the direct release asset URL.
+
+[**▶ Watch the SafeHaven silent demo**](https://github.com/muralikrishnapalisetti/SiWG917-SafeHaven/releases)
+
+### Output screenshot 1 — Phrase detection and event trigger
+
+This screenshot shows the live camera in the recording state, the host-side recognition/event output, and the camera receiver reporting event-triggered recording. The visible `HELP ME DETECTED` and event-sent messages are evidence from the captured host application output.
 
 ![SafeHaven phrase detection and event trigger](safehaven-trigger-detected.png)
 
-### Webcam recording in progress
+### Output screenshot 2 — Recording in progress
+
+This screenshot shows the webcam overlay indicating that recording is active and a countdown is in progress. The camera receiver terminal shows event handling and generated AVI file paths.
 
 ![SafeHaven event-triggered recording in progress](safehaven-recording-active.png)
 
-These artifacts show an example run. They do not, on their own, establish recognition accuracy or reliability across different voices, noise levels, and network conditions.
+**What the demonstration establishes:** the captured run shows phrase detection, successful local event transmission, and recording initiated by the camera receiver. These screenshots document an example run; they do not establish recognition accuracy, response latency across all conditions, or production reliability.
+
+> **Image locations:** The two screenshots are currently stored in the repository root, so the image links above intentionally use root-relative filenames. For the video, prefer a GitHub Release asset rather than committing a large MP4 into source history. Update the video link to the published release asset once the MP4 has been uploaded.
+
+---
+
+## Current features and future scope
+
+| Capability | Status | Notes |
+|---|---|---|
+| Microphone capture on the SiWG917 development kit | Implemented in firmware project | Validate sample alignment/quality on target hardware |
+| Wi-Fi audio transport | Implemented | UDP audio stream to host PC on port `5006` |
+| Local speech recognition | Implemented on host | Vosk; not currently running on the SiWG917 |
+| Configured emergency phrases | Implemented | `help me`, `please help me`, `help me please` |
+| Structured trigger event | Implemented | JSON event sent locally to `127.0.0.1:5005` |
+| Event-field validation | Implemented | Checks event type, phrase, source, and event-ID format |
+| Short webcam recording | Implemented | OpenCV-based, nominally 10 seconds |
+| Local event log | Implemented | JSON Lines (`.jsonl`) output |
+| Send video to registered mobile | Planned | Requires secure transfer, device registration, and notification handling |
+| Phone push alert / buzzer integration | Planned | Not present in the current implementation |
+| Physical buzzer or siren | Planned | Requires suitable driver hardware, safe control logic, and tests |
+| On-device phrase detection | Planned / not integrated | Requires firmware, resource, and SDK feasibility evaluation |
+| Authenticated and protected event transport | Future hardening | Current local UDP event is not authenticated |
 
 ---
 
 ## System architecture
 
-This diagram represents the **current implemented design** in the firmware and the two host-side Python applications. The development kit streams audio only; recognition and the decision to trigger recording occur on the host PC.
+Audio travels from the development kit to the host PC over the local Wi-Fi network. Speech recognition and event generation run on the host. The voice event is then passed locally to the camera receiver.
 
 ```mermaid
-flowchart TB
-    subgraph DEVICE["SiWG917 / SiWx917 development kit"]
-        MIC["Microphone input"] --> CAPTURE["Microphone / I2S capture<br/>16 kHz, 512-frame blocks"]
-        CAPTURE --> CONVERT["Firmware sample conversion<br/>Select channel 0 and convert<br/>32-bit samples to signed 16-bit mono PCM"]
-        CONVERT --> PACKET["UDP audio sender<br/>512 samples per packet<br/>1,024 bytes per packet"]
-    end
-
-    subgraph WIFI["Local Wi-Fi network"]
-        AP["Wi-Fi access point / local LAN"]
-    end
-
-    subgraph HOST["Windows host PC"]
-        subgraph AUDIO["Process A — safehaven_audio_receiver.py"]
-            RX["Audio listener<br/>0.0.0.0:5006"]
-            PCM["Check packet length<br/>Decode PCM and measure levels"]
-            GAIN["Apply software gain ×4<br/>Saturate to signed 16-bit range"]
-            VOSK["Local Vosk speech recognition"]
-            MATCH{"Recognized text contains<br/>the adjacent words “help me”? "}
-            COOLDOWN{"10-second trigger<br/>cooldown permits event?"}
-            EVENT["Create JSON event<br/>type, event_id, phrase,<br/>transcript and source"]
-            SEND["Send event to<br/>127.0.0.1:5005"]
-            RAW["Raw audio diagnostics<br/>safehaven_raw.wav"]
-            ENHANCED["Gain-adjusted diagnostics<br/>safehaven_test.wav"]
-
-            RX --> PCM --> GAIN --> VOSK --> MATCH
-            RX -. "save incoming PCM" .-> RAW
-            GAIN -. "save processed PCM" .-> ENHANCED
-            MATCH -->|No| RX
-            MATCH -->|Yes| COOLDOWN
-            COOLDOWN -->|No| RX
-            COOLDOWN -->|Yes| EVENT --> SEND
-        end
-
-        subgraph CAMERA["Process B — safehaven_receiver_reference.py"]
-            START["Start this process first<br/>Open webcam and listen on port 5005"]
-            PARSE["Receive and parse JSON"]
-            VALID{"Required event fields valid?"}
-            DUP{"Event ID already seen?"}
-            BUSY{"Recording already active?"}
-            IGNORE["Ignore invalid, duplicate,<br/>or currently busy event"]
-            RECORD["Initialize video writer<br/>and record webcam frames<br/>for nominally 10 seconds"]
-            FILES["Save AVI video and append<br/>event statuses to event_log.jsonl"]
-
-            START --> PARSE --> VALID
-            VALID -->|No| IGNORE
-            VALID -->|Yes| DUP
-            DUP -->|Yes| IGNORE
-            DUP -->|No| BUSY
-            BUSY -->|Yes| IGNORE
-            BUSY -->|No| RECORD --> FILES
-        end
-    end
-
-    PACKET -->|"Wi-Fi UDP audio to host LAN IP:5006"| AP
-    AP --> RX
-    SEND -->|"Loopback UDP JSON event"| PARSE
+flowchart TD
+    A["Silicon Labs SiWG917 / SiWx917<br/>Microphone capture"] -->|"Wi-Fi UDP<br/>PCM audio, port 5006"| B["Host audio receiver<br/>safehaven_audio_receiver.py"]
+    B --> C["Vosk speech recognition<br/>Runs locally on host PC"]
+    C -->|"Configured phrase recognized"| D["JSON voice event<br/>127.0.0.1:5005"]
+    D --> E["Camera event receiver<br/>safehaven_receiver_reference.py"]
+    E --> F["Validate event fields<br/>Reject malformed/duplicate IDs"]
+    F --> G["Capture webcam video<br/>Nominal 10-second clip"]
+    G --> H["AVI video + JSONL event log"]
 ```
 
-### End-to-end operation
+### Component responsibilities
 
-1. **Start the camera receiver.** It opens the host webcam and listens for event messages on UDP port `5005`.
-2. **Start the audio receiver.** It loads the local Vosk model and listens on UDP port `5006`.
-3. **Stream audio from the board.** The firmware captures microphone blocks, converts the selected channel into signed 16-bit mono PCM, and sends each packet to the host PC's configured LAN IPv4 address.
-4. **Process and recognize audio on the host.** The audio receiver checks packet lengths, records raw audio, applies software gain with 16-bit saturation, records the processed audio, and submits it for speech recognition.
-5. **Evaluate the phrase.** Final recognition results are checked. A partial result may also trigger an event when the phrase remains stable across three checks. A 10-second cooldown helps reduce immediate repeated triggers.
-6. **Send a local JSON event.** If a trigger qualifies, the audio process sends a message to `127.0.0.1:5005`.
-7. **Validate the event.** The camera process checks the expected event type, phrase, source, and event-ID format. It ignores invalid messages, duplicate IDs retained in its in-memory cache, and events received while a recording is already active.
-8. **Record and save.** A qualifying event starts a nominal 10-second webcam recording. The camera process saves an AVI file and appends event-status entries to a JSON Lines log.
+**A. SiWG917 firmware — microphone capture and transport**
 
-### Important implementation details
+The firmware uses the configured microphone/I2S path, converts captured samples into a 16-bit mono audio buffer, and sends audio packets to the configured host IPv4 address over UDP port `5006`. In the current architecture, firmware is responsible for capture and transport, not the speech-recognition decision.
 
-- The firmware is currently configured for 16 kHz audio capture, 512 frames per capture block, and a 1,024-byte signed 16-bit mono audio packet.
-- The source code selects channel 0 and shifts each 32-bit I2S sample right by 16 bits. The code comments identify this bit-alignment assumption as a test conversion. **Validate the sample layout, amplitude, and intelligibility on the actual board** before treating the audio path as fully verified.
-- The audio and camera applications are separate Python processes on the same host computer. The event sender targets `127.0.0.1:5005`; the board sends audio to the host PC's LAN address on port `5006`.
-- UDP does not, by itself, provide guaranteed delivery, sender authentication, or application-level encryption.
+**B. Host audio receiver — audio conditioning and recognition**
+
+`host/safehaven_audio_receiver.py` listens on UDP port `5006`. The receiver expects 16 kHz, mono, signed 16-bit PCM. It writes raw and gain-adjusted diagnostic WAV files, applies configured software gain with 16-bit saturation, and passes the audio to Vosk. Completed and stable partial recognition results are checked for the configured phrases.
+
+**C. Trigger event — recognition to action**
+
+When the configured phrase is detected, the audio receiver sends a JSON event to `127.0.0.1:5005`. The message includes an event type, generated event ID, normalized phrase, transcript, and source label. The event is sent over loopback because the audio and camera applications run on the same host PC in the current design.
+
+**D. Camera receiver — validation and capture**
+
+`host/safehaven_receiver_reference.py` listens on UDP port `5005`, opens the default webcam, and validates the event fields. A qualifying new event starts a nominal 10-second recording. The receiver saves an AVI file and appends event-status information to a JSON Lines log.
+
+---
+
+## End-to-end operating sequence
+
+1. **Power and network:** The SiWG917 kit is powered and configured to connect to the same local network as the host PC.
+2. **Capture and stream:** Firmware captures microphone samples and sends PCM audio packets to the PC via Wi-Fi UDP on port `5006`.
+3. **Receive and condition audio:** The host audio receiver processes the incoming stream and writes diagnostics.
+4. **Recognize locally:** Vosk evaluates the host-side audio stream for configured phrases.
+5. **Create event:** A qualifying recognition is normalized into an event such as `SAFEHAVEN_VOICE_EVENT`, with `phrase` set to `HELP_ME`.
+6. **Send local event:** The audio receiver sends JSON to the camera receiver on localhost UDP port `5005`.
+7. **Validate:** The camera receiver checks the required event fields and event-ID format, and ignores duplicate IDs during the current process lifetime.
+8. **Record:** The camera receiver records a nominal 10-second clip from the webcam.
+9. **Preserve local output:** The AVI filename and event status are written to the local event output directory and JSONL log.
+
+The workflow depends on the board, Wi-Fi network, host PC, microphone path, speech recognition, webcam, and writable storage. Failure of any required component can interrupt the workflow.
+
+---
+
+## Implementation details
+
+### 1. Embedded microphone capture and Wi-Fi UDP
+
+The SiWG917 firmware is configured to capture microphone data and send audio packets to the host PC. The host destination address must be the PC's LAN IPv4 address, not `127.0.0.1`. The configured destination port is `5006`.
+
+UDP is lightweight and simple to integrate, but does not provide delivery guarantees, retransmission, ordering, or encryption by itself. Packet loss or jitter can affect the reconstructed speech signal.
+
+**PCM format expected by the receiver:** 16,000 samples/second, mono, signed 16-bit PCM.
+
+The firmware's current conversion path includes an assumption about how microphone samples are aligned in the received 32-bit I2S words. Confirm the sample alignment and actual audio quality on the target hardware before relying on this format outside the current experiment.
+
+### 2. Host-side Vosk speech recognition
+
+The host receiver uses Vosk and the local model `vosk-model-small-en-us-0.15`. The configured phrase list includes:
+
+- `help me`
+- `please help me`
+- `help me please`
+
+The host application checks final results and a stable partial-result path. It includes a trigger cooldown to reduce immediate repeated events while the same utterance continues to appear in recognition output. This does not eliminate all false positives or missed detections; ambient noise, microphone quality, speaking style, sample conversion, and packet loss can affect results.
+
+### 3. Structured event messaging
+
+A recognized phrase is converted into a JSON event. In the current design this event is sent locally from the audio receiver to the camera receiver on the same PC. The camera receiver validates selected fields before initiating a recording. Field validation checks message structure; it does **not** authenticate the sender or make the event channel secure.
+
+### 4. Event-triggered camera recording
+
+The camera receiver uses OpenCV to access the default host webcam (camera index `0`, unless configured otherwise). On receiving an acceptable event, the application records a nominal 10-second video clip and writes it as an AVI file. The actual output depends on camera availability, frame capture, video-writer initialization, storage permissions, and whether the process remains running.
+
+### 5. Diagnostics and audit trail
+
+The host application prints UDP packet and audio-level diagnostics and writes WAV files used for troubleshooting. The camera receiver writes video clips and a JSONL event log. These outputs help developers determine whether the stream is arriving, whether an event was generated, and whether recording began. They are development diagnostics, not a tamper-proof security audit log.
 
 ---
 
@@ -151,72 +221,87 @@ flowchart TB
 ### Hardware
 
 - Silicon Labs SiWG917 / SiWx917 development kit (BRD2605A).
-- Windows host PC.
-- Webcam supported by OpenCV; the default camera index is `0`.
-- Local Wi-Fi network that allows the development kit and PC to exchange UDP traffic.
+- Windows host computer.
+- Webcam available to OpenCV; default camera index is `0`.
+- Local Wi-Fi access point/network that allows the development kit and host PC to communicate.
 - USB and power connections required by the development kit.
 
 ### Software
 
-- Simplicity Studio and a compatible Silicon Labs SDK/toolchain for the selected board target.
+- Simplicity Studio and a compatible Silicon Labs SDK/toolchain for the firmware project.
 - Python 3.
-- Python packages: `vosk` and `opencv-python`.
-- Vosk model: `vosk-model-small-en-us-0.15`.
+- Python packages `vosk` and `opencv-python`.
+- Vosk model `vosk-model-small-en-us-0.15`.
 
-The Vosk model is a runtime dependency downloaded separately; it is not included in this source repository.
+The host scripts use Python's standard library for UDP sockets, JSON, WAV processing, timing, paths, and log formatting.
+
+---
 
 ## Repository structure
 
 ```text
-SiWG917-SafeHaven/
+.
 ├── README.md
-├── LICENSE
-├── safehaven-trigger-detected.png
-├── safehaven-recording-active.png
 ├── firmware/
 │   └── SafeHaven_UDP_Client/
 │       ├── SafeHaven_UDP_Client.slcp
 │       ├── app.c
 │       ├── app.h
-│       ├── main.c
 │       ├── config/
 │       ├── autogen/
-│       └── cmake_gcc/
-└── host/
-    ├── safehaven_audio_receiver.py
-    ├── safehaven_receiver_reference.py
-    └── vosk-model-small-en-us-0.15/   # Download separately
+│       ├── resources/
+│       ├── readme.md
+│       └── SAFEHAVEN_README.md
+├── host/
+│   ├── safehaven_audio_receiver.py
+│   └── safehaven_receiver_reference.py
+├── safehaven-trigger-detected.png
+├── safehaven-recording-active.png
+├── submission_inventory.csv
+└── .gitignore
 ```
 
-Runtime recordings, logs, WAV files, downloaded speech-recognition data, virtual environments, and generated build outputs should generally remain out of source control unless deliberately prepared as sanitized demonstration assets.
+- `firmware/SafeHaven_UDP_Client/` — Simplicity Studio firmware project and configuration.
+- `host/safehaven_audio_receiver.py` — receives UDP PCM audio, writes diagnostics, runs Vosk, and sends the voice event.
+- `host/safehaven_receiver_reference.py` — receives and validates voice events, displays the webcam, records clips, and logs event status.
+- `firmware/SafeHaven_UDP_Client/SAFEHAVEN_README.md` — firmware-focused project notes.
+- `submission_inventory.csv` — file inventory for the submission.
+- `.gitignore` — excludes local environments, downloaded model files, runtime recordings/logs, and generated build output.
+
+The Vosk model, virtual environment, captured WAV files, and generated video files are runtime assets and should generally not be committed as source files.
 
 ---
 
-## Setup and installation
+## Installation and host setup on Windows
 
-The instructions below use Windows PowerShell. Run commands from the repository root, the directory containing this `README.md`.
+Run commands from **PowerShell at the repository root** (the directory containing `README.md`).
 
-### 1. Create a Python virtual environment
+### Step 1 — Create a virtual environment
 
 ```powershell
 py -3 -m venv .venv
+```
+
+If `py` is unavailable, use the path to your installed Python executable to create the environment.
+
+### Step 2 — Install host dependencies
+
+```powershell
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
 .\.venv\Scripts\python.exe -m pip install vosk opencv-python
 ```
 
-If `py` is not available, use the path to your installed Python executable to create the environment.
-
-Verify the packages:
+Verify imports:
 
 ```powershell
 .\.venv\Scripts\python.exe -c "import vosk, cv2; print('Vosk import: OK'); print('OpenCV:', cv2.__version__)"
 ```
 
-### 2. Download the Vosk model
+### Step 3 — Download the Vosk model
 
 1. Open the [official Vosk model list](https://alphacephei.com/vosk/models).
 2. Download `vosk-model-small-en-us-0.15.zip`.
-3. Extract the model so the following path exists:
+3. Extract it so the model is directly under `host/`, with this expected path:
 
 ```text
 host/
@@ -226,19 +311,23 @@ host/
     └── ...
 ```
 
-From the repository root, verify the placement:
+The directory `host/vosk-model-small-en-us-0.15/am/` must exist. Avoid extracting the archive into an extra nested directory.
+
+### Step 4 — Verify model placement
+
+From the repository root:
 
 ```powershell
 Test-Path ".\host\vosk-model-small-en-us-0.15\am"
 ```
 
-Expected output:
+Expected result:
 
 ```text
 True
 ```
 
-You can also verify that the model loads:
+Verify model loading:
 
 ```powershell
 .\.venv\Scripts\python.exe -c "from vosk import Model; Model(r'host/vosk-model-small-en-us-0.15'); print('Vosk model loaded')"
@@ -246,59 +335,55 @@ You can also verify that the model loads:
 
 ---
 
-## Configure, build, and flash the firmware
+## Configure and flash the SiWG917 firmware
 
-Open `firmware/SafeHaven_UDP_Client/SafeHaven_UDP_Client.slcp` in Simplicity Studio. Confirm that the selected board target, SDK components, and toolchain are available.
+Open `firmware/SafeHaven_UDP_Client/SafeHaven_UDP_Client.slcp` in Simplicity Studio and confirm the required SDK components and toolchain are available.
 
-### 1. Configure the host IP address
+### Configure the host IP address
 
-In `firmware/SafeHaven_UDP_Client/app.c`, locate:
+In `firmware/SafeHaven_UDP_Client/app.c`, configure the destination host address and UDP port:
 
 ```c
-#define SERVER_IP_ADDRESS               "HOST IP ADDRESS HERE"
-#define AUDIO_SERVER_PORT               5006U
+#define SERVER_IP_ADDRESS "HOST IP ADDRESS HERE"
+#define AUDIO_SERVER_PORT 5006U
 ```
 
-Replace the placeholder with the host PC's **LAN IPv4 address** on the same network as the board.
+Replace the placeholder with the host PC's **LAN IPv4 address** on the same network as the board. Do not use `127.0.0.1` as the board's destination; loopback refers to the board itself.
 
-Do not use `127.0.0.1` for the board destination. Loopback refers to the device itself, not the host PC.
+### Configure Wi-Fi credentials
 
-### 2. Configure Wi-Fi credentials
-
-Check the client-profile configuration in `firmware/SafeHaven_UDP_Client/config/sl_net_default_values.h`. The repository contains placeholder values such as:
+The project currently has Wi-Fi client-profile definitions in `firmware/SafeHaven_UDP_Client/config/sl_net_default_values.h`, for example:
 
 ```c
 #define DEFAULT_WIFI_CLIENT_PROFILE_SSID "Your_wifi_name"
 #define DEFAULT_WIFI_CLIENT_CREDENTIAL "Your_wifi_password"
 ```
 
-Use the credentials for your test network in your local build configuration. **Never commit real Wi-Fi passwords, access tokens, or other secrets to a public repository.**
+Use your test network's values in your local build configuration. **Never commit real Wi-Fi passwords or other secrets to a public repository.**
 
-### 3. Build and flash
+### Build and flash
 
 1. Save the network configuration.
 2. Build the firmware project in Simplicity Studio.
-3. Resolve any SDK, toolchain, or project configuration errors.
+3. Resolve SDK, toolchain, or configuration errors.
 4. Flash the built firmware to the supported development kit.
-5. Inspect serial/log output for Wi-Fi connection, microphone initialization, completed sample capture, and UDP transmission messages.
+5. Inspect serial/log output to confirm Wi-Fi connection, microphone initialization, capture, and UDP send activity.
 
-A successful compile alone does not prove that the I2S samples are aligned correctly or that the stream is intelligible. Validate those details on the physical kit.
+The I2S-to-PCM conversion should be validated on the target hardware. A successful compile alone does not prove the microphone samples are correctly aligned or suitable for speech recognition.
 
 ---
 
-## Run SafeHaven
+## Run the prototype
 
-Start the two host applications in **separate PowerShell windows**. The camera receiver must be started first.
+Start the camera receiver **before** the audio receiver. Open two separate PowerShell windows at the repository root.
 
 ### Window A — Camera event receiver
-
-From the repository root, run:
 
 ```powershell
 .\.venv\Scripts\python.exe .\host\safehaven_receiver_reference.py
 ```
 
-Typical startup messages include:
+Typical startup output:
 
 ```text
 [READY] Listening for voice events on UDP port 5005
@@ -306,17 +391,15 @@ Typical startup messages include:
 [ARMED] Say 'help me' to start recording.
 ```
 
-Keep this process running. If the webcam does not open, close other applications that may be using it and check the configured camera index.
+The camera receiver listens on UDP port `5005` and attempts to open the default webcam. If the camera does not open, close other applications that may be using it and check the selected camera index.
 
-### Window B — Audio receiver
-
-In a second PowerShell window, run:
+### Window B — Audio receiver and Vosk
 
 ```powershell
 .\.venv\Scripts\python.exe .\host\safehaven_audio_receiver.py
 ```
 
-Typical startup messages include:
+Typical startup output:
 
 ```text
 [SafeHaven] Vosk model loaded successfully.
@@ -325,32 +408,32 @@ Typical startup messages include:
 [SafeHaven] Say 'help me' to trigger SafeHaven.
 ```
 
-After the board connects to Wi-Fi and begins streaming, the host receiver should report incoming audio packets.
+With the board configured and streaming, incoming packets should be visible in the logs. A remote address printed in logs depends on the local network.
 
-### Trigger and stop behavior
+### Trigger behavior
 
-1. Speak a configured phrase near the development kit's microphone.
-2. When a qualifying transcript is recognized and the cooldown allows it, the audio process sends a JSON event to the camera receiver.
-3. A valid new event received while the camera receiver is idle starts a nominal 10-second recording.
-4. The receiver saves the video and appends status records to the event log.
+Speak one of the configured phrases near the development kit's microphone. When the host recognizes a qualifying phrase, it sends a JSON event to the camera receiver. A valid new event starts a nominal 10-second webcam recording.
 
-To stop the camera receiver, focus the camera window and press **Q**. To stop the audio receiver, press **Ctrl+C** in its PowerShell window.
+- Press **Q** while the camera window is focused to exit the camera receiver.
+- Press **Ctrl+C** in the audio receiver terminal to stop the audio application and close diagnostic WAV files.
 
-Phrase recognition is not guaranteed. Test in a controlled environment and measure false triggers, missed triggers, and latency before making reliability claims.
+Recognition is not guaranteed. Test in a controlled environment and record false triggers, missed detections, and latency before drawing reliability conclusions.
 
 ---
 
 ## Network interfaces and event format
 
-| Data flow | Protocol and endpoint | Purpose |
-|---|---|---|
-| Development kit → host audio receiver | UDP to host LAN IPv4, port `5006` | PCM audio packets |
-| Audio receiver → camera receiver | UDP to `127.0.0.1:5005` | Local JSON event |
-| Camera receiver listener | Binds to UDP port `5005` | Receives event messages on the host |
+| Direction | Protocol | Destination | Purpose |
+|---|---|---|---|
+| Development kit → host audio receiver | UDP | Host LAN IPv4, port `5006` | PCM audio packets |
+| Audio receiver → camera receiver | UDP | `127.0.0.1:5005` | Local JSON voice event |
+| Camera receiver listener | UDP | Host binds to port `5005` | Receive local event messages |
 
-The audio receiver binds to `0.0.0.0:5006`, so the host listens on its IPv4 interfaces. The camera receiver binds to port `5005`, while the audio process sends events to loopback because both programs are expected to run on the same PC. Keep the two host applications on that same computer for this setup.
+The audio receiver listens on `0.0.0.0:5006`, which binds to the host's IPv4 interfaces. The camera receiver also listens on port `5005`; in the current setup the event sender targets loopback because both processes run on the same PC. Keep the two Python applications on the same host for this configuration.
 
-### Example JSON event
+### Example event
+
+This illustrates the event schema; the ID is an example and actual IDs are generated at runtime.
 
 ```json
 {
@@ -362,8 +445,6 @@ The audio receiver binds to `0.0.0.0:5006`, so the host listens on its IPv4 inte
 }
 ```
 
-The event ID in this example is illustrative; the application generates a new ID at runtime.
-
 The camera receiver checks that:
 
 - `type` equals `SAFEHAVEN_VOICE_EVENT`.
@@ -371,15 +452,15 @@ The camera receiver checks that:
 - `source` equals `siwx917_microphone`.
 - `event_id` is a 1–100 character string containing only letters, digits, underscores, or hyphens.
 
-The transcript may be recorded in the log, but it is not one of the required validation fields. Field validation checks message structure; it does not authenticate the sender.
+The `transcript` field may be included in logs, but is not one of the required validation fields. Validation enforces the expected message structure; it **does not authenticate the sender**.
 
 ---
 
-## Output files and diagnostics
+## Generated evidence and diagnostic outputs
 
 ### Video and event log
 
-The camera application writes files under `host/safehaven_events/`:
+The camera receiver creates output under:
 
 ```text
 host/safehaven_events/
@@ -387,37 +468,41 @@ host/safehaven_events/
 └── event_log.jsonl
 ```
 
-- The AVI file contains the intended 10-second clip if the webcam, frame capture, video writer, and storage all operate successfully.
-- `event_log.jsonl` stores one JSON object per line. Status entries can include `TRIGGER_RECEIVED`, `RECORDING_STARTED`, `RECORDING_COMPLETED`, and `RECORDING_FAILED`.
-- Event IDs are cached in memory while the camera receiver process is running to help suppress duplicate events.
+- The AVI file contains the nominal 10-second recording if video-writer initialization and frame capture succeed.
+- `event_log.jsonl` stores one JSON object per line. Example statuses include `TRIGGER_RECEIVED`, `RECORDING_STARTED`, `RECORDING_COMPLETED`, and `RECORDING_FAILED`.
+- Recent event IDs are remembered in process memory to help ignore duplicates while the receiver remains running.
 
 ### Audio diagnostic files
 
-The audio receiver writes two files under `host/`:
+The audio receiver creates two WAV files under `host/`:
 
-- `safehaven_raw.wav` — incoming PCM before software gain.
-- `safehaven_test.wav` — audio after gain and signed 16-bit saturation.
+- `safehaven_raw.wav` — PCM received before software gain.
+- `safehaven_test.wav` — audio after configured gain and 16-bit saturation.
 
-Console diagnostics include packet counts, packet lengths, raw and processed RMS levels, peak levels, and the count of samples clipped by gain. These measures help investigate signal level and packet delivery; they do not, by themselves, prove correct sample alignment or reliable recognition.
+Console diagnostics include packet counts, packet lengths, raw and enhanced RMS levels, peak levels, and the count of samples clipped by gain. These diagnostics can help troubleshoot packet delivery and signal amplitude, but rising RMS values alone do not prove correct sample alignment or accurate speech recognition.
+
+Runtime WAV files, generated logs, and camera videos should generally stay out of version control unless explicitly prepared as sanitized demonstration assets.
 
 ---
 
 ## Testing and validation
 
-The demonstration screenshots and linked video show an example of phrase detection, event transmission, and recording initiation. They are not a substitute for a measured test campaign.
+The captured output images and video demonstrate the armed state, phrase detection, local event transmission, and camera recording initiation. These artifacts document an example run; they do not establish a measured accuracy or guaranteed field performance.
 
-For repeatable evaluation, record the board and SDK versions, host OS and Python version, number of trials, successful detections, false triggers, missed triggers, detection latency, packet loss, and whether the expected video and log files were created. Do not publish accuracy or reliability figures without a defined test set and recorded results.
+For reproducible evaluation, record the board and SDK version, host OS/Python version, number of trials, successful detections, false triggers, missed triggers, detection latency, packet loss, and whether the clip and log were produced. Do not publish accuracy or reliability values unless measured over a defined test set.
 
-| Test scenario | What to verify |
+### Suggested validation matrix
+
+| Test scenario | What to observe |
 |---|---|
 | Normal conversation | Whether unintended triggers occur |
-| Each configured phrase | Whether recognition sends an event |
-| Background noise or different speaking distances | False triggers and missed detections |
-| Board disconnect or Wi-Fi loss | Whether packet loss or missing audio is visible in logs |
-| Valid and malformed JSON | Valid events are accepted; invalid fields are rejected |
-| Repeated event ID | Duplicate handling works as intended |
-| Recording output | Video file exists, plays, and is close to the intended duration |
-| Webcam unavailable or storage unwritable | The failure is visible in logs |
+| Each configured emergency phrase | Whether recognition initiates an event |
+| Background noise | False triggers and missed detections |
+| Board disconnect or Wi-Fi loss | Whether missing packets are visible in logs |
+| Valid and malformed event messages | Valid events accepted; invalid fields rejected |
+| Repeated event ID | Duplicate-event behavior |
+| Video output | File creation, playback, and approximate 10-second duration |
+| Webcam unavailable or storage unwritable | Clear failure handling and log output |
 
 ---
 
@@ -425,51 +510,54 @@ For repeatable evaluation, record the board and SDK versions, host OS and Python
 
 | Symptom | Likely cause | What to check |
 |---|---|---|
-| Vosk model missing or incomplete | Model not downloaded or extracted into an extra nested folder | Confirm `host/vosk-model-small-en-us-0.15/am/` exists |
-| `ModuleNotFoundError: No module named 'vosk'` | Package installed into a different Python environment | Use `.venv\Scripts\python.exe` for both installation and execution |
-| Audio receiver waits for packets | Packets do not reach host UDP port `5006` | Check board Wi-Fi, host LAN IP, destination port, firewall rules, and board logs |
-| Packets arrive but no event triggers | Audio may be quiet, distorted, misaligned, or not intelligible | Inspect the WAV files and RMS/peak diagnostics; validate the firmware sample conversion |
-| Camera preview fails | Webcam is unavailable or used by another application | Close other camera applications and check camera index |
-| Address already in use | Another process owns port `5005` or `5006` | Stop stale SafeHaven processes or identify the process using the port |
-| Event is sent but no recording starts | Camera receiver is not ready or rejects the event | Check both consoles, event fields, and whether recording is already active |
-| Event is accepted but video output fails | Video writer, frame capture, or storage failed | Check webcam state, directory permissions, and receiver logs |
-| Microphone capture fails | I2S/capture initialization or sample-ready path failed | Review serial logs and target-specific SDK configuration |
+| `Vosk model not found or incomplete` | Model missing or nested incorrectly | Confirm `host/vosk-model-small-en-us-0.15/am/` exists |
+| `ModuleNotFoundError: No module named 'vosk'` | Dependencies installed in a different Python environment | Use `.venv\Scripts\python.exe` to install and run |
+| Audio receiver waits for UDP packets | Packets are not reaching port `5006` | Check board Wi-Fi, PC LAN IP, destination port, firewall, and board logs |
+| Audio arrives but phrase does not trigger | Signal may be quiet, distorted, incorrectly aligned, or not speech-like | Inspect WAV files, levels, sample format, and microphone/I2S conversion |
+| Camera preview fails | Webcam unavailable or already in use | Close other camera apps and check camera index |
+| Address already in use | Another process owns port `5005` or `5006` | Stop previous SafeHaven processes or identify the listener |
+| Event sent but recording does not begin | Camera receiver not running or event rejected | Inspect both consoles and verify event fields |
+| Event accepted but video recording fails | Video writer or frame capture failed | Check camera preview, directory permissions, and receiver logs |
+| Microphone samples unavailable | Capture/I2S initialization or data-ready path problem | Review serial logs and target-specific SDK configuration |
 
 ---
 
 ## Security, privacy, and safety limitations
 
-SafeHaven is an experimental prototype. It is not a certified alarm, medical alert, CCTV, or emergency-response product.
+SafeHaven is an experimental research prototype. It is not a certified alarm, medical alert, CCTV system, or emergency-response product.
 
-- **No sender authentication:** The camera receiver validates selected event fields but does not cryptographically prove who sent the message. A sender with access to the listener may be able to forge an event.
-- **No application-level encryption:** The current UDP audio and event channels do not add application-level encryption or integrity protection.
-- **Local storage only:** In the current workflow, recordings and event logs are saved on the host PC. The system does not deliver clips to a registered phone, remote backup, or cloud service.
-- **Recognition uncertainty:** Noise, accents, microphone placement, incorrect sample conversion, or packet loss can cause false positives or missed detections.
-- **Availability dependencies:** Host shutdown, Wi-Fi loss, webcam failure, or insufficient storage can interrupt the workflow.
-- **Privacy:** Inform people when a camera is in use, obtain appropriate consent, restrict access to saved clips, and define retention/deletion rules.
-- **Emergency limitations:** The application does not contact emergency services and must not be the only way to request assistance.
+- **No event authentication:** The current camera receiver validates selected fields but does not cryptographically authenticate who sent the event. A sender able to reach the listener could potentially spoof a message.
+- **No application-level encryption:** Current UDP audio and event transport do not provide application-level encryption or integrity protection.
+- **Local-storage dependency:** Current video evidence is stored on the host PC. There is no registered-phone delivery, remote backup, or cloud retention in the implemented workflow.
+- **Recognition uncertainty:** Noise, accents, microphone placement, incorrect sample conversion, or packet loss can cause false positives or false negatives.
+- **Availability dependencies:** Host shutdown, Wi-Fi outages, webcam access failures, or storage problems can stop the workflow.
+- **Privacy responsibilities:** People should be informed when a camera is in use. Obtain appropriate consent, restrict access to stored clips, and set suitable retention/deletion rules.
+- **Emergency limitations:** Do not rely on the prototype as the only way to request help. It does not contact emergency services and cannot guarantee that an emergency will be detected or recorded.
 
-Use the prototype only in a controlled, trusted test environment. A deployment-oriented implementation would need a threat model, authenticated and replay-resistant event messages, protected transport, robust recovery behavior, and systematic performance testing.
-
----
-
-## Future improvements
-
-1. **Validate the embedded audio path:** Confirm I2S sample alignment, channel selection, audio level, intelligibility, and packet behavior on the physical kit.
-2. **Measure baseline performance:** Record trigger latency, false triggers, missed triggers, packet loss, and successful video recordings over a defined test set.
-3. **Improve event security:** Add message authentication and replay protection, and evaluate a suitable protected transport.
-4. **Add optional notifications:** Design secure delivery to a registered phone with clear consent, access control, and retention rules.
-5. **Add a local alert output:** Evaluate a buzzer or other local indicator, with safe handling of repeated or accidental triggers.
-6. **Improve resilience:** Test Wi-Fi loss, process restarts, camera failures, and low-storage conditions.
-7. **Publish reproducible demonstrations:** Document the exact hardware/software versions and distinguish observed behavior from performance that has not yet been measured.
+A deployment-oriented design would require threat modeling, authenticated and replay-resistant events, protected transport, access controls, reliable state reporting, robust failure handling, and systematic false-positive/false-negative testing.
 
 ---
 
-## License and attribution
+## Roadmap
 
-The root-level `LICENSE` file applies to original SafeHaven code and documentation authored by the project contributor, subject to the exceptions stated in that file. Silicon Labs SDK files, vendor examples, generated files, and third-party dependencies remain subject to their own applicable copyright notices and license terms.
+1. **Validate the embedded audio path:** Confirm I2S sample alignment, channel selection, PCM levels, and packet integrity on the physical kit.
+2. **Quantify baseline performance:** Measure detection latency, false triggers, missed triggers, packet loss, and video-recording success over a defined test set.
+3. **Mobile notifications and clip delivery:** Add secure transfer to a registered phone and push notifications. Define authentication, consent, retention, and recovery behavior.
+4. **Buzzer / local alert:** Add a buzzer or siren driver triggered by a valid event, with configurable behavior and safe testing to avoid unintended escalation.
+5. **Evaluate on-device phrase detection:** Assess approaches that fit the SiWG917's compute, memory, and SDK constraints; integrate only after the firmware builds and the behavior is validated on hardware.
+6. **Secure communications:** Add event authentication and replay protection, and evaluate supported protected transport options.
+7. **Resilience and recovery:** Test Wi-Fi loss, process restart, camera failure, storage exhaustion, and event-log consistency.
+8. **Reproducible release demo:** Keep a clean recording showing board activity, host recognition, event transmission, and saved video, with all claims limited to demonstrated behavior.
 
-The firmware project is based on a Silicon Labs Wi-Fi example and has been adapted for this prototype. Preserve the original source-file notices and review the applicable licenses before redistributing SDK or example code. Documentation inherited from the source example is not evidence that the corresponding measurements or procedures have been performed for SafeHaven.
+---
+
+## Attribution and licensing
+
+The firmware project is based on a Silicon Labs Wi-Fi example and has been adapted for the SafeHaven prototype. Preserve applicable original copyright notices and license terms, and review the licenses for the Silicon Labs SDK and third-party components before redistributing source files.
+
+The inherited firmware `readme.md` describes procedures from the original Wi-Fi power-save example, including Energy Profiler and current measurements. Those inherited instructions are not evidence that power measurements were performed for SafeHaven.
+
+The root-level `LICENSE` file is included. It applies only to original SafeHaven code and documentation authored by the project contributor, subject to the exceptions stated in that file. Silicon Labs SDK files, vendor examples, generated files, and third-party dependencies remain subject to their own applicable license terms; do not relicense third-party material contrary to those terms.
 
 ---
 
@@ -478,15 +566,13 @@ The firmware project is based on a Silicon Labs Wi-Fi example and has been adapt
 | Item | Current implementation |
 |---|---|
 | Project | SafeHaven |
-| Embedded platform | Silicon Labs SiWG917 / SiWx917 development kit (BRD2605A) |
-| Audio capture | Microphone/I2S path, 16 kHz configuration |
-| Audio transport | Wi-Fi UDP, host port `5006` |
-| Audio format expected by host | Mono, signed 16-bit PCM |
-| Speech recognition | Offline Vosk engine on the Windows host PC |
-| Trigger condition | Recognized text contains the adjacent words `help me` |
+| Embedded platform | Silicon Labs SiWG917 / SiWx917 development kit |
+| Audio capture and transport | Board microphone path; Wi-Fi UDP to host port `5006` |
+| Speech-recognition location | Host PC using Vosk |
+| Trigger phrases | `help me`, `please help me`, `help me please` |
 | Host event transport | Localhost UDP port `5005` |
-| Event action | Validate event and attempt nominal 10-second webcam recording |
-| Saved outputs | AVI clip, JSON Lines event log, raw and processed WAV diagnostics |
-| Mobile notifications | Not implemented |
-| Buzzer/local alarm | Not implemented |
-| Emergency-service contact | Not implemented |
+| Event action | Event validation followed by nominal 10-second webcam capture |
+| Saved evidence | AVI video clip and JSON Lines event log |
+| Mobile notification | Planned, not implemented |
+| Buzzer / siren | Planned, not implemented |
+| On-device phrase detection | Planned, not integrated |
