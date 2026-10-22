@@ -131,52 +131,127 @@ This screenshot shows the webcam overlay indicating that recording is active and
 
 ## System architecture
 
-Audio travels from the development kit to the host PC over the local Wi-Fi network. Speech recognition and event generation run on the host. The voice event is then passed locally to the camera receiver.
+This is the **current implemented architecture** in the firmware and host Python scripts. The SiWG917 captures and streams audio; speech recognition and the decision to trigger recording run on the Windows host. The two Python applications communicate with one another over host loopback UDP.
 
 ```mermaid
-flowchart TD
-    A["Silicon Labs SiWG917 / SiWx917<br/>Microphone capture"] -->|"Wi-Fi UDP<br/>PCM audio, port 5006"| B["Host audio receiver<br/>safehaven_audio_receiver.py"]
-    B --> C["Vosk speech recognition<br/>Local inference on host PC"]
-    C -->|"Configured phrase recognized"| D["JSON voice event<br/>127.0.0.1:5005"]
-    D --> E["Camera event receiver<br/>safehaven_receiver_reference.py"]
-    E --> F["Validate event fields<br/>Reject malformed/duplicate IDs"]
-    F --> G["Capture webcam video<br/>Nominal 10-second clip"]
-    G --> H["AVI video + JSONL event log"]
+flowchart TB
+    subgraph DEVICE["SiWG917 / SiWx917 Development Kit"]
+        MIC["Microphone input"] --> I2S["Silicon Labs microphone / I2S capture<br/>16 kHz, 512-frame capture blocks"]
+        I2S --> CONVERT["Firmware sample conversion<br/>Select channel 0; shift 32-bit samples<br/>to signed 16-bit mono PCM"]
+        CONVERT --> PACKET["UDP audio sender<br/>512 mono samples per datagram<br/>1,024 bytes per packet"]
+    end
+
+    subgraph NETWORK["Local Wi-Fi Network"]
+        AP["Wi-Fi access point / local LAN"]
+    end
+
+    subgraph HOST["Windows Host PC"]
+        direction TB
+
+        subgraph AUDIO["Process 1 — host/safehaven_audio_receiver.py"]
+            direction TB
+            RX["Audio UDP socket<br/>listens on 0.0.0.0:5006"]
+            PCM["Check packet length<br/>Decode signed 16-bit little-endian PCM<br/>Measure RMS / peak"]
+            GAIN["Apply software gain ×4<br/>Saturate to signed 16-bit range"]
+            VOSK["Local Vosk model<br/>vosk-model-small-en-us-0.15"]
+            MATCH{"Final result or stable partial contains<br/>the adjacent words “help me”?<br/>10-second trigger cooldown"}
+            RAW["Diagnostic file<br/>host/safehaven_raw.wav"]
+            ENHANCED["Diagnostic file<br/>host/safehaven_test.wav<br/>gain-adjusted audio"]
+            EVENT["Build JSON voice event<br/>type, event_id, phrase=HELP_ME,<br/>transcript, source=siwx917_microphone"]
+            SEND["Send event over loopback UDP<br/>127.0.0.1:5005"]
+            RX --> PCM --> GAIN --> VOSK --> MATCH
+            RX -. "preserve incoming audio" .-> RAW
+            GAIN -. "preserve processed audio" .-> ENHANCED
+            MATCH -->|No — keep listening| RX
+            MATCH -->|Yes — trigger allowed| EVENT --> SEND
+        end
+
+        subgraph CAMERA["Process 2 — host/safehaven_receiver_reference.py"]
+            direction TB
+            READY["Start this process first<br/>Bind event socket on UDP 5005<br/>Open webcam and show live preview"]
+            PARSE["Receive and parse JSON event"]
+            VALID{"Required fields valid?<br/>type=SAFEHAVEN_VOICE_EVENT<br/>phrase=HELP_ME<br/>source=siwx917_microphone<br/>event_id matches allowed format"}
+            DUP{"Event ID already seen<br/>in this process?"}
+            BUSY{"Recording already active?"}
+            IGNORE["Ignore event<br/>invalid, duplicate, or while busy"]
+            START["Log trigger and initialize AVI writer"]
+            CAPTURE["Record webcam frames<br/>nominal duration: 10 seconds"]
+            OUTPUT["Local outputs<br/>host/safehaven_events/*.avi<br/>host/safehaven_events/event_log.jsonl"]
+            READY -. "receiver stays armed" .-> PARSE
+            PARSE --> VALID
+            VALID -->|No| IGNORE
+            VALID -->|Yes| DUP
+            DUP -->|Yes| IGNORE
+            DUP -->|No| BUSY
+            BUSY -->|Yes| IGNORE
+            BUSY -->|No| START --> CAPTURE --> OUTPUT
+        end
+    end
+
+    PACKET -->|"Wi-Fi UDP audio<br/>to configured host IP:5006"| AP
+    AP --> RX
+    SEND -->|"Local UDP JSON event<br/>127.0.0.1:5005"| PARSE
 ```
 
-### Component responsibilities
+### How to read the diagram
 
-**A. SiWG917 firmware — microphone capture and transport**
+1. **Capture on the board:** the firmware initializes the microphone/I2S path, captures blocks of 512 frames, converts the selected channel to signed 16-bit mono samples, and sends each 1,024-byte audio datagram to the host PC's configured LAN IPv4 address on UDP port `5006`.
+2. **Receive and prepare audio:** `safehaven_audio_receiver.py` listens on UDP `5006`, checks packet length, decodes the PCM samples, records the original stream to `safehaven_raw.wav`, applies software gain with 16-bit saturation, and records the gain-adjusted stream to `safehaven_test.wav`.
+3. **Recognize the phrase:** the host passes the gain-adjusted audio to the local Vosk model. Final recognition results are checked, and an early trigger may occur when a partial result containing the adjacent words `help me` remains stable across three checks. A 10-second trigger cooldown reduces repeated events.
+4. **Create a local event:** when a match qualifies, the audio process sends JSON over loopback UDP to `127.0.0.1:5005`. This event includes `type`, `event_id`, `phrase`, `transcript`, and `source`; the event channel is between two processes on the same host, not a board-to-cloud service.
+5. **Validate and record:** `safehaven_receiver_reference.py` parses the event and checks the expected type, phrase, source, and event-ID format. It ignores invalid messages, duplicate IDs kept in its in-memory cache, and events received while a recording is already active. A qualifying new event starts a nominal 10-second webcam recording.
+6. **Save evidence and diagnostics:** the camera process writes an AVI video and appends status entries to `event_log.jsonl`. The audio process also prints packet and audio-level diagnostics. These are local development outputs, not a tamper-proof audit trail.
 
-The firmware uses the configured microphone/I2S path, converts captured samples into a 16-bit mono audio buffer, and sends audio packets to the configured host IPv4 address over UDP port `5006`. In the current architecture, firmware is responsible for capture and transport, not the speech-recognition decision.
+### Important implementation notes
 
-**B. Host audio receiver — audio conditioning and recognition**
-
-`host/safehaven_audio_receiver.py` listens on UDP port `5006`. The receiver expects 16 kHz, mono, signed 16-bit PCM. It writes raw and gain-adjusted diagnostic WAV files, applies configured software gain with 16-bit saturation, and passes the audio to Vosk. Completed and stable partial recognition results are checked for the configured phrases.
-
-**C. Trigger event — recognition to action**
-
-When the configured phrase is detected, the audio receiver sends a JSON event to `127.0.0.1:5005`. The message includes an event type, generated event ID, normalized phrase, transcript, and source label. The event is sent over loopback because the audio and camera applications run on the same host PC in the current design.
-
-**D. Camera receiver — validation and capture**
-
-`host/safehaven_receiver_reference.py` listens on UDP port `5005`, opens the default webcam, and validates the event fields. A qualifying new event starts a nominal 10-second recording. The receiver saves an AVI file and appends event-status information to a JSON Lines log.
+- **Speech recognition is host-side.** The current firmware does not run the Vosk model or on-device keyword-spotting inference. Mobile alerts and a physical buzzer are not implemented.
+- **Validate the I2S sample layout on the physical kit.** The firmware's current conversion selects channel 0 and shifts each 32-bit sample right by 16 bits. The source code explicitly treats the assumption that the valid sample bits occupy the upper 16 bits as a test conversion; confirm sample alignment, amplitude, and intelligibility on the real board before treating the PCM path as fully validated.
+- **Configure the board's destination IP.** In `app.c`, replace `SERVER_IP_ADDRESS` with the host PC's LAN IPv4 address. The board sends audio to that address on UDP `5006`; do not set the board destination to `127.0.0.1`.
+- **Start the camera receiver first.** It must already be listening on UDP `5005` and have successfully opened the webcam before the audio process can trigger it.
+- **UDP is not a secure or guaranteed-delivery protocol by itself.** The current implementation does not add application-level encryption or authentication to the audio or JSON event. Use a trusted test network and protect the saved audio, video, and logs.
 
 ---
 
 ## End-to-end operating sequence
 
-1. **Power and network:** The SiWG917 kit is powered and configured to connect to the same local network as the host PC.
-2. **Capture and stream:** Firmware captures microphone samples and sends PCM audio packets to the PC via Wi-Fi UDP on port `5006`.
-3. **Receive and condition audio:** The host audio receiver processes the incoming stream and writes diagnostics.
-4. **Recognize locally:** Vosk evaluates the host-side audio stream for configured phrases.
-5. **Create event:** A qualifying recognition is normalized into an event such as `SAFEHAVEN_VOICE_EVENT`, with `phrase` set to `HELP_ME`.
-6. **Send local event:** The audio receiver sends JSON to the camera receiver on localhost UDP port `5005`.
-7. **Validate:** The camera receiver checks the required event fields and event-ID format, and ignores duplicate IDs during the current process lifetime.
-8. **Record:** The camera receiver records a nominal 10-second clip from the webcam.
-9. **Preserve local output:** The AVI filename and event status are written to the local event output directory and JSONL log.
+The following sequence view shows the runtime order after the project has been configured and both host applications are started.
 
-The workflow depends on the board, Wi-Fi network, host PC, microphone path, speech recognition, webcam, and writable storage. Failure of any required component can interrupt the workflow.
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Board as SiWG917 Firmware
+    participant WiFi as Local Wi-Fi LAN
+    participant Audio as Audio Receiver<br/>UDP 5006
+    participant Model as Local Vosk Model
+    participant CamRx as Camera Receiver<br/>UDP 5005
+    participant Webcam as Host Webcam
+    participant Files as Local Files
+
+    Note over CamRx,Webcam: Start camera receiver first; it opens the webcam and waits for events.
+    loop Continuous audio streaming
+        Board->>WiFi: Send 1,024-byte PCM datagram to host IP:5006
+        WiFi->>Audio: Deliver UDP audio packet
+        Audio->>Files: Append raw audio to safehaven_raw.wav
+        Audio->>Audio: Apply gain ×4 and 16-bit saturation
+        Audio->>Files: Append processed audio to safehaven_test.wav
+        Audio->>Model: Submit processed PCM
+        Model-->>Audio: Partial or final transcript
+        alt Transcript contains "help me" and trigger cooldown permits
+            Audio->>CamRx: JSON voice event to 127.0.0.1:5005
+            CamRx->>CamRx: Parse and validate event; check duplicate ID and recording state
+            alt Event is valid, new, and receiver is idle
+                CamRx->>Webcam: Capture frames for nominally 10 seconds
+                CamRx->>Files: Save AVI and append event-status JSONL records
+            else Invalid, duplicate, or busy
+                CamRx->>CamRx: Ignore the event
+            end
+        else No qualifying trigger
+            Audio->>Audio: Continue listening for the next packet
+        end
+    end
+```
+
+The actual result depends on microphone/I2S sample alignment, the host and board remaining connected, UDP packet arrival, recognition conditions, webcam availability, writable storage, and both host processes continuing to run.
 
 ---
 
